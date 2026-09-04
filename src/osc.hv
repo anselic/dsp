@@ -1,19 +1,14 @@
-/// dsp/osc: naive oscillators.
+/// dsp/osc: oscillators libraries.
 ///
 /// A `Phasor` ramp generator and an `Osc` that turns that ramp into the classic
 /// waveform shapes (sine, saw, square, triangle). The shapers are naive, i.e.
 /// not bandlimited, so they alias at high frequencies. Frequencies and sample
 /// rate are in hertz; all sample outputs are single precision.
 
-// `math` is the standard library's, another package - so it is imported by its
-// full `std/...` path. A bare `import math` would look for a `math.hv` in this
-// (`dsp`) package instead, which does not exist.
 import std/math { sinf, fabsf, fmodf, tau_f32 }
 
-// --- Phasor ---------------------------------------------------------------
-
-/// A bare ramp generator: outputs a rising phase in [0, 1) that wraps every
-/// cycle. Every oscillator shape below is derived from it.
+/// outputs a rising phase in [0, 1) that wraps every cycle. Every oscillator
+/// shape below is derived from it.
 pub struct Phasor {
     phase: f32, // current phase, in [0, 1)
     inc: f32,   // per-sample increment = freq / sample_rate
@@ -23,7 +18,8 @@ pub struct Phasor {
         return Phasor { phase: 0.0, inc: freq / sr };
     }
 
-    /// Retune to `freq` hertz at sample rate `sr`, keeping its phase.
+    /// Set the frequency to `freq` hertz at sample rate `sr` while keeping its
+    /// phase.
     pub proc set_freq(*self, freq: f32, sr: f32) {
         self.inc = freq / sr;
     }
@@ -39,8 +35,6 @@ pub struct Phasor {
     }
 }
 
-// --- Osc ------------------------------------------------------------------
-
 /// A phase-accumulating oscillator with naive (non-bandlimited) waveform
 /// shapers. Every shaper advances the phase by one sample and returns a value
 /// in [-1, 1].
@@ -53,7 +47,8 @@ pub struct Osc {
         return Osc { phase: 0.0, inc: freq / sr };
     }
 
-    /// Retune to `freq` hertz at sample rate `sr`, keeping its phase.
+    /// Set the frequency to `freq` hertz at sample rate `sr` while keeping its
+    /// phase.
     pub proc set_freq(*self, freq: f32, sr: f32) {
         self.inc = freq / sr;
     }

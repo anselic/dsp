@@ -1,23 +1,22 @@
 /// dsp/filters: audio filters.
 ///
-/// Three drop-in filter types, from cheapest to most capable: a one-pole
-/// lowpass, a general-purpose biquad with the standard RBJ EQ responses
-/// (lowpass, highpass, bandpass, notch, peaking, shelves), and a
-/// state-variable filter that produces lowpass/highpass/bandpass/notch at once.
+/// Three filter types, from cheapest to most capable: a one-pole lowpass, a
+/// biquad with the usual RBJ EQ responses (lowpass, highpass, bandpass, notch,
+/// peaking, shelves), and a state-variable filter that gives lowpass, highpass,
+/// bandpass and notch at the same time.
 ///
-/// The usage pattern is the same for all three: build one with a constructor
-/// (`cutoff`/`q`/`sr` in hertz), then call its `.process` method once per input
-/// sample. State lives in the filter struct, so keep it between samples.
-/// All single precision.
+/// All three are used in the same way. Build one with a constructor, where
+/// `cutoff` and `sr` are in hertz, then call `.process` once for each input
+/// sample. The state is in the filter struct, so keep the struct between
+/// samples. Single precision only.
 
 import std/math { expf, cosf, sinf, tanf, sqrtf, powf, pi_f32, tau_f32 }
 
-// --- OnePole --------------------------------------------------------------
-
-/// A one-pole lowpass, the cheapest usable smoother, one multiply-add per
-/// sample. Good for de-zippering control signals and gentle tone shaping.
-// difference equation y = a0*x + b1*y[-1]; b1 = exp(-2*pi*fc/sr) places the
-// pole and a0 = 1 - b1 keeps unity gain at DC.
+/// A one-pole lowpass. One multiply-add for each sample, which is the cheapest
+/// smoother that is still usable. Use it to de-zipper control signals and for
+/// gentle tone shaping.
+// difference equation: y = a0*x + b1*y[-1]. b1 = exp(-2*pi*fc/sr) sets the pole,
+// and a0 = 1 - b1 gives unity gain at DC.
 pub struct OnePole {
     a0: f32,
     b1: f32,
@@ -29,13 +28,13 @@ pub struct OnePole {
         return OnePole { a0: 1.0 - b1, b1: b1, z1: 0.0 };
     }
 
-    /// Retune to corner frequency `cutoff` at sample rate `sr`.
+    /// Tune to corner frequency `cutoff` at sample rate `sr`.
     pub proc set_cutoff(*self, cutoff: f32, sr: f32) {
         self.b1 = expf(-tau_f32() * cutoff / sr);
         self.a0 = 1.0 - self.b1;
     }
 
-    /// Filter one input sample `x`, returning the filtered output.
+    /// Filter one input sample `x` and return the output.
     @alloc(false)
     pub proc process(*self, x: f32) f32 {
         self.z1 = self.a0 * x + self.b1 * self.z1;
@@ -43,20 +42,19 @@ pub struct OnePole {
     }
 }
 
-// --- Biquad ---------------------------------------------------------------
-
-/// A second-order (biquad) section covering the common EQ responses via the
-/// constructors below. The workhorse building block of parametric EQs and
-/// crossovers; chain several for steeper slopes.
-// transposed direct-form II. coefficients use the RBJ audio-EQ cookbook and are
-// stored a0-normalized (biquad_from does the normalization and clears state).
+/// A second-order (biquad) section. The constructors below give the common EQ
+/// responses. This is the basic part of parametric EQs and crossovers. For a
+/// steeper slope, chain more than one.
+// transposed direct-form II. the coefficients come from the RBJ audio-EQ
+// cookbook and are stored a0-normalized. `from` does the normalization and sets
+// the state to zero.
 pub struct Biquad {
     b0: f32, b1: f32, b2: f32,
     a1: f32, a2: f32,
     s1: f32, s2: f32, // transposed DF-II state
 
-    /// Build a biquad from raw coefficients `b0..a2`, normalizing by `a0` and
-    /// starting from zero state. The response constructors below are built on this.
+    /// Build a biquad from the raw coefficients `b0..a2`. Normalizes by `a0` and
+    /// starts with zero state. The response constructors below all use this.
     pub proc from(b0: f32, b1: f32, b2: f32, a0: f32, a1: f32, a2: f32) Biquad {
         return Biquad {
             b0: b0 / a0, b1: b1 / a0, b2: b2 / a0,
@@ -85,8 +83,8 @@ pub struct Biquad {
             1.0 + alpha, -2.0 * cs, 1.0 - alpha);
     }
 
-    /// Bandpass centered at `cutoff` hertz with `q` setting the width, normalized
-    /// to 0 dB peak gain, for sample rate `sr`.
+    /// Bandpass with center at `cutoff` hertz. `q` sets the width. The peak gain
+    /// is normalized to 0 dB. For sample rate `sr`.
     pub proc bandpass(cutoff: f32, q: f32, sr: f32) Biquad {
         let w: f32 = tau_f32() * cutoff / sr;
         let cs: f32 = cosf(w);
@@ -96,8 +94,8 @@ pub struct Biquad {
             1.0 + alpha, -2.0 * cs, 1.0 - alpha);
     }
 
-    /// Notch (band-reject) at `cutoff` hertz with `q` setting the width, for
-    /// sample rate `sr`.
+    /// Notch (band-reject) at `cutoff` hertz. `q` sets the width. For sample
+    /// rate `sr`.
     pub proc notch(cutoff: f32, q: f32, sr: f32) Biquad {
         let w: f32 = tau_f32() * cutoff / sr;
         let cs: f32 = cosf(w);
@@ -107,8 +105,8 @@ pub struct Biquad {
             1.0 + alpha, -2.0 * cs, 1.0 - alpha);
     }
 
-    /// Peaking EQ: `gain_db` boost (or cut) at `cutoff` hertz, bandwidth set by
-    /// `q`, for sample rate `sr`.
+    /// Peaking EQ. Boosts or cuts by `gain_db` at `cutoff` hertz. `q` sets the
+    /// bandwidth. For sample rate `sr`.
     pub proc peak(cutoff: f32, q: f32, gain_db: f32, sr: f32) Biquad {
         let a: f32 = powf(10.0, gain_db / 40.0);
         let w: f32 = tau_f32() * cutoff / sr;
@@ -119,8 +117,8 @@ pub struct Biquad {
             1.0 + alpha / a, -2.0 * cs, 1.0 - alpha / a);
     }
 
-    /// Low shelf: `gain_db` boost (or cut) below `cutoff` hertz, slope set by
-    /// `q`, for sample rate `sr`.
+    /// Low shelf. Boosts or cuts by `gain_db` below `cutoff` hertz. `q` sets the
+    /// slope. For sample rate `sr`.
     pub proc lowshelf(cutoff: f32, q: f32, gain_db: f32, sr: f32) Biquad {
         let a: f32 = powf(10.0, gain_db / 40.0);
         let w: f32 = tau_f32() * cutoff / sr;
@@ -136,8 +134,8 @@ pub struct Biquad {
             (a + 1.0) + (a - 1.0) * cs - ta);
     }
 
-    /// High shelf: `gain_db` boost (or cut) above `cutoff` hertz, slope set by
-    /// `q`, for sample rate `sr`.
+    /// High shelf. Boosts or cuts by `gain_db` above `cutoff` hertz. `q` sets
+    /// the slope. For sample rate `sr`.
     pub proc highshelf(cutoff: f32, q: f32, gain_db: f32, sr: f32) Biquad {
         let a: f32 = powf(10.0, gain_db / 40.0);
         let w: f32 = tau_f32() * cutoff / sr;
@@ -153,8 +151,8 @@ pub struct Biquad {
             (a + 1.0) - (a - 1.0) * cs - ta);
     }
 
-    /// Retune to `other`'s response, keeping the running state, so a filter can
-    /// be moved mid-stream without the discontinuity a fresh one would produce:
+    /// Take the response of `other` and keep the running state. This lets you
+    /// move a filter while it runs. A new filter would give a discontinuity.
     ///
     ///     f.set(Biquad::lowpass(cutoff, q, sr));
     pub proc set(*self, other: Biquad) {
@@ -165,7 +163,7 @@ pub struct Biquad {
         self.a2 = other.a2;
     }
 
-    /// Filter one input sample `x`, returning the filtered output.
+    /// Filter one input sample `x` and return the output.
     @alloc(false)
     pub proc process(*self, x: f32) f32 {
         let y: f32 = self.b0 * x + self.s1;
@@ -175,9 +173,7 @@ pub struct Biquad {
     }
 }
 
-// --- StateVariable --------------------------------------------------------
-
-/// The four simultaneous outputs of a state-variable filter for one sample.
+/// The four outputs of a state-variable filter for one sample.
 pub struct SvfOut {
     lp: f32,    /// lowpass output
     hp: f32,    /// highpass output
@@ -185,11 +181,11 @@ pub struct SvfOut {
     notch: f32, /// notch (lowpass + highpass) output
 }
 
-/// A state-variable filter producing lowpass, highpass, bandpass and notch from
-/// a single pass, sweep-friendly, so it's the one to reach for when the cutoff
-/// is being modulated.
-// topology-preserving-transform (Zavalishin) design. stays well-behaved when the
-// cutoff is modulated near Nyquist, unlike the classic Chamberlin SVF.
+/// A state-variable filter. One pass gives lowpass, highpass, bandpass and
+/// notch. It stays stable during a sweep, so use it when the cutoff is
+/// modulated.
+// topology-preserving transform (Zavalishin) design. unlike the classic
+// Chamberlin SVF, it stays stable when the cutoff is modulated near Nyquist.
 pub struct StateVariable {
     g: f32, // tan(pi * fc / sr)
     k: f32, // damping, = 1 / Q
@@ -207,8 +203,8 @@ pub struct StateVariable {
         return StateVariable { g: g, k: k, a1: a1, a2: a2, a3: a3, ic1eq: 0.0, ic2eq: 0.0 };
     }
 
-    /// Retune to `cutoff` hertz and resonance `q`, for sample rate `sr`, keeping
-    /// its running state.
+    /// Tune to `cutoff` hertz and resonance `q`, for sample rate `sr`. Keeps the
+    /// running state.
     pub proc set(*self, cutoff: f32, q: f32, sr: f32) {
         self.g = tanf(pi_f32() * cutoff / sr);
         self.k = 1.0 / q;
@@ -217,7 +213,7 @@ pub struct StateVariable {
         self.a3 = self.g * self.a2;
     }
 
-    /// Filter one input sample `x`, returning all four responses as an `SvfOut`.
+    /// Filter one input sample `x` and return all four responses in an `SvfOut`.
     @alloc(false)
     pub proc process(*self, x: f32) SvfOut {
         let v3: f32 = x - self.ic2eq;

@@ -1,12 +1,6 @@
-/// dsp/utils: small audio unit conversions.
-///
-/// Helpers for moving between the units DSP code mixes constantly: linear
-/// amplitude vs decibels, and MIDI note numbers vs frequency in hertz. All
-/// single precision.
+/// dsp/utils: utility functions for audio processing (e.g. unit conversions, etc.).
 
 import std/math { powf, log10f, log2f }
-
-// TODO: the compiler should be able to infer these are `@alloc(false)`.
 
 /// Convert a gain in decibels to a linear amplitude multiplier (0 dB -> 1.0).
 pub proc db_to_lin(db: f32) f32 { return powf(10.0, db / 20.0); }

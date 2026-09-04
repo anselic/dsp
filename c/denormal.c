@@ -1,20 +1,20 @@
 // Denormal (subnormal) float handling, exposed via `std/dsp/denormal`.
 //
-// A denormal operand falls off the fast path on most cores, so a filter or a
-// delay tail decaying towards silence - a signal made almost entirely of
-// denormals - can take several times longer to process than the same block of
-// ordinary audio. Real-time audio code therefore asks the FPU to flush
-// denormals to zero instead of computing them, for the duration of a block.
+// On most cores, a denormal operand takes a slow path in the FPU. A filter or a
+// delay tail that decays to silence is a signal of almost only denormals, so it
+// can take several times longer to process than a block of normal audio. To
+// avoid this, real-time audio code tells the FPU to flush denormals to zero for
+// the length of a block instead of to compute them.
 //
 //   x86: MXCSR bit 15 (FTZ, flush a denormal *result* to zero) and bit 6 (DAZ,
-//        treat a denormal *input* as zero). SSE2 is baseline on x86-64.
-//   aarch64: FPCR bit 24 (FZ) covers both.
-//   elsewhere: a no-op, and correct - the block just runs at whatever denormals
-//        cost on that target.
+//        read a denormal *input* as zero). SSE2 is baseline on x86-64.
+//   aarch64: FPCR bit 24 (FZ) does both.
+//   other targets: no operation. The block runs at the denormal speed of that
+//        target, which is still correct.
 //
-// `disable` returns the previous control word for `restore` to put back, because
-// the setting is per-thread and shared with whoever called us: a plugin runs on
-// the host's audio thread and must leave it as it found it.
+// The setting is per thread, and the thread is shared with the caller. A plugin
+// runs on the audio thread of the host and must give it back unchanged. So
+// `disable` returns the previous control word, and `restore` writes it back.
 #include <stdint.h>
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__SSE2__) \
