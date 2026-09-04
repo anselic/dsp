@@ -1,0 +1,22 @@
+import dsp/osc { Osc }
+
+proc main() i32 {
+    let sr: f32 = 48000.0; // sample rate (in hertz)
+    let freq: f32 = 440.0; // A4 (in hertz)
+
+    // An oscillator holds its own phase between calls. Each `.sine()` returns
+    // one sample in [-1, 1] and advances the phase by `freq / sr`.
+    let osc: Osc = Osc::new(freq, sr);
+
+    println("First 8 samples of a 440 Hz sine at 48 kHz:");
+    let i: i32 = 0;
+    while (i < 8) {
+        print("  sample ");
+        print(i);
+        print(" = ");
+        println(osc.sine());
+        i = i + 1;
+    }
+
+    return 0;
+}

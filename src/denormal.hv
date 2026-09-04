@@ -26,8 +26,8 @@
 
 // backing symbols from dsp/c/denormal.c, which is where the per-architecture
 // control word (x86 MXCSR, aarch64 FPCR) is actually poked.
-extern rt_denormals_disable() u64;
-extern rt_denormals_restore(saved: u64) void;
+@alloc(false) extern rt_denormals_disable() u64;
+@alloc(false) extern rt_denormals_restore(saved: u64) void;
 
 /// Flush denormals to zero from here on, returning the previous FPU control
 /// word. Pass that value to `denormals_restore` when the block is done - the

@@ -1,1 +1,9 @@
-/.haven
+/target
+*.exe
+*.ll
+*.dll
+*.lib
+*.so
+*.s
+
+.haven/
